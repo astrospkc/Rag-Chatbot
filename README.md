@@ -1,159 +1,110 @@
-# Turborepo starter
+# RAG Chatbot Platform
 
-This Turborepo starter is maintained by the Turborepo core team.
+A custom **Retrieval-Augmented Generation (RAG) Chatbot Service** built as a modern monorepo. This platform enables companies or individual users to upload/provide their domain documents, automatically chunk & index knowledge into a vector database, and generate tailored AI chatbots for their end users.
 
-## Using this example
+---
 
-Run the following command:
+## 🌟 Key Concept & Vision
 
-```sh
-npx create-turbo@latest
+- **Document Ingestion**: Companies/users upload custom documentation (PDFs, Markdown, TXT, docs, API references, etc.).
+- **Knowledge Processing (RAG)**: The platform parses and indexes documents into vector embeddings to allow semantic search retrieval.
+- **Custom Chatbot Generation**: Generates customized chatbot instances that reference the uploaded domain knowledge.
+- **End-User Access**: Businesses can embed or deploy their custom RAG chatbot to serve their own customers and clients with accurate, domain-specific answers.
+
+---
+
+## 🏗️ Tech Stack & Architecture
+
+This project is structured as a **Turborepo** monorepo:
+
+### **Frontend (`apps/web`)**
+- **Framework**: React + Vite + TypeScript
+- **Styling**: Tailwind CSS
+- **Routing**: React Router (`react-router-dom`)
+
+### **Backend (`apps/api`)**
+- **Framework**: Python FastAPI
+- **Server**: Uvicorn
+- **Package & Env Manager**: [`uv`](https://github.com/astral-sh/uv)
+
+---
+
+## 📁 Repository Structure
+
+```text
+rag_chatbot/
+├── apps/
+│   ├── api/            # Python FastAPI Backend (Managed with uv)
+│   │   ├── main.py
+│   │   ├── pyproject.toml / requirements.txt
+│   │   └── package.json
+│   └── web/            # React + Vite Frontend (Managed with pnpm)
+│       ├── src/
+│       └── package.json
+├── packages/           # Shared monorepo packages/configs
+├── package.json        # Root workspace configuration
+├── pnpm-workspace.yaml # Workspace definitions
+└── README.md
 ```
 
-## What's inside?
+---
 
-This Turborepo includes the following packages/apps:
+## 🚀 Getting Started
 
-### Apps and Packages
+### Prerequisites
+- **Node.js** (v18+)
+- **pnpm** (`npm i -g pnpm`)
+- **Python 3.10+**
+- **uv** (`pip install uv` or via script)
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+---
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+### 1. Installation
 
-### Utilities
+Install frontend & monorepo dependencies from the root directory:
 
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo build
+```bash
+pnpm install
 ```
 
-Without global `turbo`, use your package manager:
+Set up and install Python dependencies in `apps/api`:
 
-```sh
-cd my-turborepo
-npx turbo build
-pnpm dlx turbo build
-pnpm exec turbo build
+```bash
+cd apps/api
+uv venv
+uv pip install -r requirements.txt
+cd ../..
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+---
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+### 2. Development
 
-```sh
-turbo build --filter=docs
+Run both the frontend and backend concurrently via Turborepo:
+
+```bash
+pnpm dev
 ```
 
-Without global `turbo`:
+Or run individual services:
 
-```sh
-npx turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
+- **Frontend (`apps/web`)**:
+  ```bash
+  pnpm dev --filter=web
+  # Runs on http://localhost:5173
+  ```
 
-### Develop
+- **Backend (`apps/api`)**:
+  ```bash
+  pnpm dev --filter=api
+  # Runs on http://localhost:8000
+  ```
 
-To develop all apps and packages, run the following command:
+---
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+## 📝 Workflow Summary
 
-```sh
-cd my-turborepo
-turbo dev
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo dev
-pnpm exec turbo dev
-pnpm exec turbo dev
-```
-
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo dev --filter=web
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-pnpm exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-pnpm exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+1. **Upload**: User provides custom knowledge files through the Web UI.
+2. **Embed & Store**: Backend processes documents into vector embeddings.
+3. **Query**: End-user asks a question to the custom chatbot.
+4. **Retrieve & Respond**: RAG retrieves relevant document contexts and provides accurate answers with sources.
