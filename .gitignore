@@ -27,6 +27,8 @@ out/
 build
 dist
 
+mvenv
+
 
 # Debug
 npm-debug.log*
