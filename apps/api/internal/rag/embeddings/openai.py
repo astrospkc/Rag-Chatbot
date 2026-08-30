@@ -16,13 +16,19 @@ class OpenAIEmbeddingProvider(BaseEmbeddingModel):
                 "langchain-openai package is required. Install it using 'pip install langchain-openai'."
             )
 
-        api_key = api_key or os.getenv("OPENAI_API_KEY")
+        api_key = api_key or os.getenv("OPENROUTER_ADMIN_KEY")
         if not api_key:
-            raise ValueError("OPENAI_API_KEY environment variable or api_key parameter is required.")
+            raise ValueError("OPENROUTER_ADMIN_KEY environment variable or api_key parameter is required.")
 
         self._embeddings = OpenAIEmbeddings(
-            openai_api_key=api_key,
-            model=model_name
+            model=model_name,
+            api_key=api_key,
+            base_url="https://openrouter.ai/api/v1",
+            check_embedding_ctx_length=False,
+            default_headers={
+                "HTTP-Referer": "http://localhost:3000",
+                "X-Title": "LangChain RAG"
+            }
         )
 
     def embed_documents(self, documents: List[str]) -> List[List[float]]:

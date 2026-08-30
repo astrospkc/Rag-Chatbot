@@ -31,6 +31,34 @@ class BaseEmbeddingModel(ABC):
         """Embed a single query string into a vector representation."""
         pass
 
+    def embed_documents_with_rate_limit(
+        self,
+        texts: list[str],
+        batch_size: int = 90,
+        delay_seconds: float = 2.0,
+        max_retries: int = 3,
+    ) -> list[list[float]]:
+        """Embed documents in batches to adhere to rate limits."""
+        import time
+
+        all_embeddings: list[list[float]] = []
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i : i + batch_size]
+            for attempt in range(max_retries):
+                try:
+                    embeddings = self.embed_documents(batch)
+                    all_embeddings.extend(embeddings)
+                    break
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        raise e
+                    time.sleep(delay_seconds * (attempt + 1))
+
+            if i + batch_size < len(texts):
+                time.sleep(delay_seconds)
+
+        return all_embeddings
+
     def to_langchain(self) -> "LangChainEmbeddingsAdapter":
         """Wrap this framework-agnostic embedding model into a LangChain-compatible Embeddings object."""
         return LangChainEmbeddingsAdapter(self)

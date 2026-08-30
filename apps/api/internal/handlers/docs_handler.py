@@ -1,5 +1,12 @@
+from internal.rag.embeddings import EmbeddingModelConfig
+from internal.rag.embeddings import EmbeddingFactory
+from internal.rag.embeddings.embeddings import LangChainEmbeddingsAdapter
+from internal.rag.embeddings.embeddings import LangChainEmbeddings
+from internal.rag.chunking.chunking import LangChainChunkerAdapter
+from internal.rag.chunking.chunking import RecursiveChunker
 from internal.rag.loaders.documentLoader import DocumentLoader
 from fastapi import APIRouter, UploadFile, BackgroundTasks
+import os
 # from internal.rag.pipeline import ingestion_pipeline
 
 router = APIRouter()
@@ -50,7 +57,35 @@ async def upload_doc(background_tasks: BackgroundTasks):
     document_loader = DocumentLoader(filepath)
     document = document_loader.load()
 
-    print("pdf document load: ", document)
+    # print("pdf document load: ", document)
+    
+    recursive_chunker = RecursiveChunker(chunk_size=1000, chunk_overlap=200)
+    chunked_documents = recursive_chunker.chunk(document)
+    # chunked_documents = recursive_chunker.chunk_list(document, chunk_size=100)
+
+    
+    # extract page contents
+    texts = [doc.page_content for doc in chunked_documents]
+    print("texts: ",len(texts))
+    # print("text: ", texts[0])
+
+    config = EmbeddingModelConfig(
+        model_name="nvidia/nemotron-3-embed-1b:free",
+        dimensions=768
+    )
+    # provider from embedding factory
+    embed_provider = EmbeddingFactory.get_provider("openai",model_name=config.model_name,api_key=os.getenv("OPENROUTER_ADMIN_KEY"))
+
+    # generate embedding for all text chunks
+    embeddings = embed_provider.embed_documents_with_rate_limit(texts)
+    
+    print("embeddings length: ", len(embeddings))
+    print("embedding:", embeddings[0])
+    # now insert in the vector store
+
+
+    
+    
 
     return {
         "message": "Test document queued for processing",
