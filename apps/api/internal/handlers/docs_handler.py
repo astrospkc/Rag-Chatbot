@@ -1,3 +1,4 @@
+from internal.tasks.rag_tasks import run_ingestion_pipeline
 from internal.rag.embeddings import EmbeddingModelConfig
 from internal.rag.embeddings import EmbeddingFactory
 from internal.rag.embeddings.embeddings import LangChainEmbeddingsAdapter
@@ -33,10 +34,20 @@ async def upload_document(
         "status": "processing"
     }
 
-
 @router.post("/doc")
 async def upload_doc(background_tasks: BackgroundTasks):
+    filepath = "/home/punam/Documents/punam_2/punam/punam/ai_projects/new_ai_projects/rag_chatbot/apps/api/telepsychics-pdfdrive-.pdf"
+    run_ingestion_pipeline.delay(filepath)
+    return {
+        "message": "Document accepted",
+        "status": "processing"
+    }
+
+# @router.post("/doc")
+# async def upload_doc(background_tasks: BackgroundTasks):
     # Hardcoded relative or absolute path to the local PDF file inside apps/api
+    # aws set up for file upload 
+    
     filepath = "/home/punam/Documents/punam_2/punam/punam/ai_projects/new_ai_projects/rag_chatbot/apps/api/telepsychics-pdfdrive-.pdf"
 
     # this will be done later-----

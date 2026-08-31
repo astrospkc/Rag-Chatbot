@@ -29,7 +29,7 @@ class OpenAIEmbeddingProvider(BaseEmbeddingModel):
                 "HTTP-Referer": "http://localhost:3000",
                 "X-Title": "LangChain RAG"
             }
-        )
+)
 
     def embed_documents(self, documents: List[str]) -> List[List[float]]:
         return self._embeddings.embed_documents(documents)
