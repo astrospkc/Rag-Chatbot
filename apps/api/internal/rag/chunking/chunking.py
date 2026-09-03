@@ -20,6 +20,11 @@ class BaseChunker(ABC):
         Split a list of LangChain documents into smaller chunks.
         """
         pass
+    
+
+    def chunk_list(self, data:list, chunk_size: int=100):
+        for i in range(0, len(data), chunk_size):
+            yield data[i : i+ chunk_size]
 
 
 class LangChainChunkerAdapter(BaseChunker):
