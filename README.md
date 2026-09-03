@@ -1,74 +1,101 @@
-# RAG Chatbot Platform
+# 🤖 Production-Grade RAG Chatbot Platform
 
-A custom **Retrieval-Augmented Generation (RAG) Chatbot Service** built as a modern monorepo. This platform enables companies or individual users to upload/provide their domain documents, automatically chunk & index knowledge into a vector database, and generate tailored AI chatbots for their end users.
-
----
-
-## 🌟 Key Concept & Vision
-
-- **Document Ingestion**: Companies/users upload custom documentation (PDFs, Markdown, TXT, docs, API references, etc.).
-- **Knowledge Processing (RAG)**: The platform parses and indexes documents into vector embeddings to allow semantic search retrieval.
-- **Custom Chatbot Generation**: Generates customized chatbot instances that reference the uploaded domain knowledge.
-- **End-User Access**: Businesses can embed or deploy their custom RAG chatbot to serve their own customers and clients with accurate, domain-specific answers.
+A modular, enterprise-ready **Retrieval-Augmented Generation (RAG) Platform** built as a modern full-stack monorepo. This platform enables users and organizations to upload domain-specific documents (PDFs, text, docs), execute distributed background ingestion, store vector embeddings, and serve high-accuracy context-aware AI chatbot responses.
 
 ---
 
-## 🏗️ Tech Stack & Architecture
+## ⭐ Resume Highlights & Key Engineering Accomplishments
 
-This project is structured as a **Turborepo** monorepo:
-
-### **Frontend (`apps/web`)**
-- **Framework**: React + Vite + TypeScript
-- **Styling**: Tailwind CSS
-- **Routing**: React Router (`react-router-dom`)
-
-### **Backend (`apps/api`)**
-- **Framework**: Python FastAPI
-- **Server**: Uvicorn
-- **Package & Env Manager**: [`uv`](https://github.com/astral-sh/uv)
+* **Modular RAG System Architecture**: Designed a decoupled, framework-agnostic Python RAG engine supporting customizable document loaders, chunking strategies (Recursive, Semantic), and extensible embedding providers (`OpenAIEmbeddings` / `OpenRouter`).
+* **Asynchronous Task Processing with Celery & RabbitMQ**: Implemented distributed task queueing using **Celery** and **CloudAMQP (RabbitMQ)** to handle heavy CPU/IO-bound document parsing and vector generation off the main HTTP request loop.
+* **Resilient API Integration & Rate Limiting**: Engineed custom embedding providers with built-in rate-limiting, exponential backoff/retries, and custom header configurations (`default_headers` for OpenRouter proxy validation).
+* **AWS Cloud Storage Integration**: Configured secure document ingestion workflows utilizing **AWS S3** presigned URLs for client-side uploads and server-side processing.
+* **Database & Vector Search**: Structured persistence with **PostgreSQL + pgvector** for storing high-dimensional vector embeddings and metadata alongside document chunks.
+* **High-Performance Monorepo Architecture**: Structured frontend (`React`, `Vite`, `TypeScript`, `Tailwind CSS`) and backend (`FastAPI`, `uv`, `Python 3.14`) within a **Turborepo + pnpm workspace**.
 
 ---
 
-## 📁 Repository Structure
+## 🛠️ Implemented Features
+
+### 1. Document Processing & Ingestion Pipeline
+- **Document Loading Engine**: Native loaders for handling multi-page PDF documents and raw text inputs.
+- **Flexible Chunking Strategies**: 
+  - `RecursiveChunker` with customizable chunk size and overlap.
+  - Abstract `BaseChunker` interface for easy addition of Semantic or Hierarchical chunkers.
+- **Asynchronous Ingestion Queues**: Heavy document ingestion tasks offloaded to **Celery worker queues** (`Queue("rag")`) using **RabbitMQ (CloudAMQP)** as the message broker.
+
+### 2. Multi-Provider Embedding Engine
+- **Framework-Agnostic Embedding Interface**: Abstract `BaseEmbeddingModel` & `EmbeddingFactory` pattern to easily swap embedding models.
+- **OpenRouter & OpenAI Integration**: Seamless support for custom endpoints with required `HTTP-Referer` and `X-Title` header passing via `default_headers`.
+- **Rate Limit & Resiliency Wrappers**: Custom `embed_documents_with_rate_limit` handling batching and request limits smoothly.
+
+### 3. AWS S3 Integration
+- **Presigned URL Generation**: Secure file upload flow via `boto3` for uploading documents to AWS S3 prior to background task processing.
+
+### 4. Vector Persistence & Retrieval
+- **pgvector Store Integration**: Persistence of embeddings and document chunk metadata into PostgreSQL using `pgvector`.
+
+### 5. Frontend & API Framework
+- **FastAPI Endpoints**: RESTful API endpoints (`/documents`, `/doc`) with background task handoff.
+- **React + Vite + TypeScript Frontend**: Fast, typed UI for document upload and interactive chatbot messaging.
+
+---
+
+## 🚀 Upcoming Features (Roadmap)
+
+- [ ] **Hybrid Search & Re-ranking**: Combine BM25 keyword search with dense vector similarity search, topped with Cohere/BGE cross-encoder re-ranking.
+- [ ] **Multi-Tenant User Management & Auth**: JWT-based authentication with role-based access control (RBAC) to allow multiple isolated workspaces.
+- [ ] **Interactive Citation & Source Attribution**: UI preview highlighting exact page numbers and PDF text snippets used to generate responses.
+- [ ] **FAISS On-Demand Vector Indexing**: Local/ephemeral FAISS index creation for ultra-fast in-memory document retrieval.
+- [ ] **Streaming Chat Responses**: Real-time server-sent events (SSE) or WebSockets for token-by-token streaming LLM responses.
+- [ ] **Observability & Analytics**: Integration with LangSmith or Phoenix for tracking RAG retrieval accuracy, latency, and token costs.
+
+---
+
+## 🏗️ Architecture & Tech Stack
 
 ```text
 rag_chatbot/
 ├── apps/
-│   ├── api/            # Python FastAPI Backend (Managed with uv)
+│   ├── api/                # Python FastAPI Backend
+│   │   ├── internal/
+│   │   │   ├── handlers/   # API Endpoint Controllers (/doc, /documents)
+│   │   │   ├── rag/        # Loaders, Chunkers, Embedding Providers & Adapters
+│   │   │   ├── services/   # Celery, RabbitMQ & AWS S3 integration
+│   │   │   └── tasks/      # Background Celery Ingestion Tasks
 │   │   ├── main.py
-│   │   ├── pyproject.toml / requirements.txt
-│   │   └── package.json
-│   └── web/            # React + Vite Frontend (Managed with pnpm)
-│       ├── src/
-│       └── package.json
-├── packages/           # Shared monorepo packages/configs
-├── package.json        # Root workspace configuration
-├── pnpm-workspace.yaml # Workspace definitions
+│   │   └── pyproject.toml
+│   └── web/                # React + Vite + TypeScript Frontend
+├── packages/               # Shared Monorepo Configurations
+├── pnpm-workspace.yaml     # Monorepo Workspace Config
+├── turbo.json              # Turborepo Task Pipeline Config
 └── README.md
 ```
 
+### Stack Overview
+* **Frontend**: React 18, Vite, TypeScript, Tailwind CSS, React Router
+* **Backend**: FastAPI, Python 3.10+, `uv` package manager
+* **Task Queue & Messaging**: Celery, RabbitMQ (CloudAMQP)
+* **Cloud & Storage**: AWS S3 (`boto3`), PostgreSQL (`pgvector`)
+* **AI Engine & Tools**: LangChain, OpenRouter API, OpenAI Embeddings
+
 ---
 
-## 🚀 Getting Started
+## 💻 Getting Started
 
 ### Prerequisites
-- **Node.js** (v18+)
-- **pnpm** (`npm i -g pnpm`)
-- **Python 3.10+**
-- **uv** (`pip install uv` or via script)
-
----
+- **Node.js** (v18+) & **pnpm**
+- **Python** (v3.10+) & **uv**
+- **RabbitMQ / CloudAMQP Instance** & **PostgreSQL + pgvector**
 
 ### 1. Installation
 
-Install frontend & monorepo dependencies from the root directory:
-
+Install frontend & monorepo dependencies:
 ```bash
 pnpm install
 ```
 
-Set up and install Python dependencies in `apps/api`:
-
+Set up Python environment in `apps/api`:
 ```bash
 cd apps/api
 uv venv
@@ -76,35 +103,15 @@ uv pip install -r requirements.txt
 cd ../..
 ```
 
----
+### 2. Running Locally
 
-### 2. Development
-
-Run both the frontend and backend concurrently via Turborepo:
-
+Run both frontend & backend concurrently:
 ```bash
 pnpm dev
 ```
 
-Or run individual services:
-
-- **Frontend (`apps/web`)**:
-  ```bash
-  pnpm dev --filter=web
-  # Runs on http://localhost:5173
-  ```
-
-- **Backend (`apps/api`)**:
-  ```bash
-  pnpm dev --filter=api
-  # Runs on http://localhost:8000
-  ```
-
----
-
-## 📝 Workflow Summary
-
-1. **Upload**: User provides custom knowledge files through the Web UI.
-2. **Embed & Store**: Backend processes documents into vector embeddings.
-3. **Query**: End-user asks a question to the custom chatbot.
-4. **Retrieve & Respond**: RAG retrieves relevant document contexts and provides accurate answers with sources.
+Run Celery background worker:
+```bash
+cd apps/api
+celery -A internal.tasks.rag_tasks worker --loglevel=info -Q rag
+```

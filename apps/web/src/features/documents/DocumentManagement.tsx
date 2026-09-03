@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import * as api from '../../api/api';
+
 import {
   Upload,
   FileText,
@@ -23,7 +25,7 @@ export const DocumentManagement: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isUploading, setIsUploading] = useState(false);
 
-  const handleUploadSubmit = (e: React.FormEvent) => {
+  const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const finalName = docNameInput.trim() || (selectedFile ? selectedFile.name : 'Company_Knowledge_Doc.pdf');
     const ext = finalName.split('.').pop()?.toLowerCase() || 'pdf';
@@ -32,8 +34,11 @@ export const DocumentManagement: React.FC = () => {
     if (ext === 'txt') fileType = 'txt';
     if (ext === 'md' || ext === 'markdown') fileType = 'markdown';
 
+    console.log("filename: ", finalName)
     setIsUploading(true);
 
+    const response = await api.services.uploadDoc(selectedFile)
+    console.log("response: ", response)
     setTimeout(() => {
       addDocument({
         name: finalName,

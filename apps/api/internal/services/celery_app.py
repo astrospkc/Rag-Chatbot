@@ -7,7 +7,8 @@ load_dotenv()
 
 celery_app = Celery(
     "rag_app",
-    broker=os.getenv("CLOUDAMQP_URL")
+    broker=os.getenv("CLOUDAMQP_URL"),
+    include=["internal.tasks.rag_tasks"]
 )
 
 # celery_app.conf.task_queues = (
