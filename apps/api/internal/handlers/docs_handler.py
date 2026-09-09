@@ -1,4 +1,5 @@
 
+from internal.services.router_service import RouterService
 from internal.models import UploadedDocument
 import requests
 from typing import Optional
@@ -14,6 +15,10 @@ from internal.rag.loaders.documentLoader import DocumentLoader
 from fastapi import APIRouter, UploadFile, Form, File, Depends
 from sqlalchemy.orm import Session
 from internal.core.db import get_db
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel
+from dotenv import load_dotenv
+load_dotenv()  # Load environment variables from .env file
 
 router = APIRouter()
 
@@ -60,15 +65,7 @@ async def upload_document(
         "message": "Document accepted",
         "status": "processing"
     }
-    # background_tasks.add_task(
-    #     ingestion_pipeline.run,
-    #     file_path
-    # )
-
-    return {
-        "message": "Document accepted",
-        "status": "processing"
-    }
+    
 
 @router.get("/documents/{file_id}")
 async def get_document_by_id(file_id: int, db: Session = Depends(get_db)):
@@ -91,3 +88,22 @@ def update_document(file_id: int, db: Session = Depends(get_db)):
     doc.status = "PROCESSING"
     db.commit()
     return doc
+
+class QueryRequest(BaseModel):
+    user_query:str
+
+router_service = RouterService()
+
+@router.get("/query")
+async def query_document(requests:QueryRequest, db:Session = Depends(get_db)):
+    user_query = requests.user_query
+    doc_id = router_service.route_query_to_document(user_query, db)
+    if doc_id is None:
+        return {
+            "message": "No relevant document found for the given query.",
+            "status": "error"
+        }
+    # fetch the result from the document 
+    result = router_service.answer_query(doc_id, user_query, db)
+    return result
+

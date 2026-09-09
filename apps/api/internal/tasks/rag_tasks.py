@@ -1,3 +1,4 @@
+from internal.services.router_service import RouterService
 from internal.models import DocumentVector
 from internal.rag.embeddings import OpenAIEmbeddingProvider
 from internal.rag.embeddings import EmbeddingFactory
@@ -116,35 +117,48 @@ def run_ingestion_pipeline(file_id: int):
     
     
 
-
-#    filepath = "/home/punam/Documents/punam_2/punam/punam/ai_projects/new_ai_projects/rag_chatbot/apps/api/telepsychics-pdfdrive-.pdf"
-
-#     # this will be done later-----
-#     # # Trigger background ingestion task for testing
-#     # background_tasks.add_task(
-#     #     ingestion_pipeline.run,
-#     #     filepath
-#     # )
-
-#     # 1. pdf will be loaded
-#     # 2. chunking 
-#     # 3. embedding generation
-#     # 4. embedding + text will be saved in postgres db
-#     # 5. vector store
-#     # 6. FAISS index will be created 
-
-#     # pdf loader
-#     document_loader = DocumentLoader(filepath)
-#     document = document_loader.load()
-
-#     # print("pdf document load: ", document)
+def query_processing(
+    query_text:str,
+    top_k:int = 20,
     
-#     recursive_chunker = RecursiveChunker(chunk_size=1000, chunk_overlap=200)
-#     chunked_documents = recursive_chunker.chunk(document)
-#     # chunked_documents = recursive_chunker.chunk_list(document, chunk_size=100)
+    
+)->dict:
+    db = SessionLocal() 
+    try:
+        # Embed user query
+        embed_provider = EmbeddingFactory.get_provider("openai")
+        query_vector = embed_provider.embed_query(query_text)
+        router_service = RouterService()
+        doc_id = router_service.route_query_to_document(query_text, db)
+        if doc_id is None:
+            return {"answer": "No relevant document found for the given query.", "sources": []}
+
+        # search nearest chunks using pgvector cosine distance
+        query = db.query(DocumentVector).filter(DocumentVector.doc_metadata["document_id"].as_integer()==doc_id)
+        if doc_id:
+            query = query.filter(DocumentVector.doc_metadata["document_id"].as_integer()==doc_id)
+            relevant_chunks = (query.order_by(DocumentVector.embedding.cosime_distance(query_vector)).limit(top_k).all())
+        if not relevant_chunks:
+            return {"answer": "No relevant chunks found for the given query.", "sources": []}
+
+        context_str = "\n\n---\n\n".join([f"[Title:{chunk.title}]\n{chunk.content}" for chunk in relevant_chunks])
+        #  4. Generate answer via LLM (e.g. ChatOpenAI, Gemini, or OpenRouter)
+
+        prompt = f"Context:\n{context_str}\n\nQuestion: {query_text}"
+        response = llm.invoke(prompt)
+        return {
+            "query": query_text,
+            "context": context_str,
+            "sources": [
+                {
+                    "id": chunk.id,
+                    "title": chunk.title,
+                    "metadata": chunk.doc_metadata
+                }
+                for chunk in relevant_chunks
+            ]
+        }
+    finally:
+        db.close()
 
     
-#     # extract page contents
-#     texts = [doc.page_content for doc in chunked_documents]
-#     print("texts: ",len(texts))
-#     # print("text: ", texts[0])
