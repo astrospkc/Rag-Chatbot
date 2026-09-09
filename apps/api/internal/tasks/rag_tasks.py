@@ -1,3 +1,9 @@
+from internal.services.router_service import RouterService
+from internal.models import DocumentVector
+from internal.rag.embeddings import OpenAIEmbeddingProvider
+from internal.rag.embeddings import EmbeddingFactory
+from internal.rag.embeddings import EmbeddingModelConfig
+from internal.rag.chunking.chunking import RecursiveChunker
 import os
 import tempfile
 from internal.models import UploadedDocument
@@ -6,6 +12,7 @@ from internal.services.celery_app import celery_app
 from internal.services.aws_service import download_file_from_s3
 from internal.rag.loaders.documentLoader import DocumentLoader
 from kombu import Queue
+from requests.exceptions import RequestException
 
 celery_app.conf.task_queues = (
     Queue("rag"),
@@ -16,7 +23,16 @@ celery_app.conf.task_default_queue = "rag"
 celery_app.conf.worker_prefetch_multiplier = 1
 
 
-@celery_app.task(queue="rag")
+@celery_app.task(
+    queue="rag",
+    retry_backoff=3, 
+    max_retries=2, 
+    retry_backoff_max=600,
+    autoretry_for=(RequestException,),
+    acks_late=True,        # ✅ confirm after execution
+    acks_on_failure=False, # ❌ don't confirm if failed
+    store_errors=True      # ✅ store exception in result
+)
 def run_ingestion_pipeline(file_id: int):
     print("Processing file ID:", file_id)
     
@@ -51,7 +67,38 @@ def run_ingestion_pipeline(file_id: int):
             print(f"Successfully loaded {len(documents)} document pages/chunks from S3.")
 
             # 4. Next steps: Chunking -> Embedding generation -> Store in DB (embeded_documents)
+            recursive_chunker = RecursiveChunker(chunk_size=1000,chunk_overlap=200)
+            chunked_doc = recursive_chunker.chunk(documents)
+           
+        #    extract text from chunked document
+            texts = [doc.page_content for doc in chunked_doc]
+            print("texts: ",len(texts))
+           
+        #    embedding generation
+            # Configuration for embeddings
+            embed_provider = EmbeddingFactory.get_provider("openai")
+
+            # Generate embeddings for the texts
+            embeddings = embed_provider.embed_documents(texts)
+
+            print(f"Generated {len(embeddings)} embeddings of dimension {len(embeddings[0])}")
+
+            vector_records =[]
+            for chunk , embedding in zip(chunked_doc, embeddings):
+                chunk_meta = dict(chunk.metadata) if hasattr(chunk, "metadata") and chunk.metadata else {}
+                chunk_meta["document_id"] = doc.id
+                doc_vector = DocumentVector(
+                    title = doc.title,
+                    content = chunk.page_content,
+                    doc_metadata = chunk_meta,
+                    embedding = embedding
+                )
+
+                vector_records.append(doc_vector)
             
+            db.add_all(vector_records)
+            db.commit()
+        # -------------------------------------------------
             doc.status = "COMPLETED"
             db.commit()
         finally:
@@ -70,35 +117,48 @@ def run_ingestion_pipeline(file_id: int):
     
     
 
-
-#    filepath = "/home/punam/Documents/punam_2/punam/punam/ai_projects/new_ai_projects/rag_chatbot/apps/api/telepsychics-pdfdrive-.pdf"
-
-#     # this will be done later-----
-#     # # Trigger background ingestion task for testing
-#     # background_tasks.add_task(
-#     #     ingestion_pipeline.run,
-#     #     filepath
-#     # )
-
-#     # 1. pdf will be loaded
-#     # 2. chunking 
-#     # 3. embedding generation
-#     # 4. embedding + text will be saved in postgres db
-#     # 5. vector store
-#     # 6. FAISS index will be created 
-
-#     # pdf loader
-#     document_loader = DocumentLoader(filepath)
-#     document = document_loader.load()
-
-#     # print("pdf document load: ", document)
+def query_processing(
+    query_text:str,
+    top_k:int = 20,
     
-#     recursive_chunker = RecursiveChunker(chunk_size=1000, chunk_overlap=200)
-#     chunked_documents = recursive_chunker.chunk(document)
-#     # chunked_documents = recursive_chunker.chunk_list(document, chunk_size=100)
+    
+)->dict:
+    db = SessionLocal() 
+    try:
+        # Embed user query
+        embed_provider = EmbeddingFactory.get_provider("openai")
+        query_vector = embed_provider.embed_query(query_text)
+        router_service = RouterService()
+        doc_id = router_service.route_query_to_document(query_text, db)
+        if doc_id is None:
+            return {"answer": "No relevant document found for the given query.", "sources": []}
+
+        # search nearest chunks using pgvector cosine distance
+        query = db.query(DocumentVector).filter(DocumentVector.doc_metadata["document_id"].as_integer()==doc_id)
+        if doc_id:
+            query = query.filter(DocumentVector.doc_metadata["document_id"].as_integer()==doc_id)
+            relevant_chunks = (query.order_by(DocumentVector.embedding.cosime_distance(query_vector)).limit(top_k).all())
+        if not relevant_chunks:
+            return {"answer": "No relevant chunks found for the given query.", "sources": []}
+
+        context_str = "\n\n---\n\n".join([f"[Title:{chunk.title}]\n{chunk.content}" for chunk in relevant_chunks])
+        #  4. Generate answer via LLM (e.g. ChatOpenAI, Gemini, or OpenRouter)
+
+        prompt = f"Context:\n{context_str}\n\nQuestion: {query_text}"
+        response = llm.invoke(prompt)
+        return {
+            "query": query_text,
+            "context": context_str,
+            "sources": [
+                {
+                    "id": chunk.id,
+                    "title": chunk.title,
+                    "metadata": chunk.doc_metadata
+                }
+                for chunk in relevant_chunks
+            ]
+        }
+    finally:
+        db.close()
 
     
-#     # extract page contents
-#     texts = [doc.page_content for doc in chunked_documents]
-#     print("texts: ",len(texts))
-#     # print("text: ", texts[0])

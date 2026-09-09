@@ -24,6 +24,7 @@ class OpenAIEmbeddingProvider(BaseEmbeddingModel):
             model=model_name,
             api_key=api_key,
             base_url="https://openrouter.ai/api/v1",
+            dimensions=768,
             check_embedding_ctx_length=False,
             default_headers={
                 "HTTP-Referer": "http://localhost:3000",
