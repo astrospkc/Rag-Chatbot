@@ -1,6 +1,7 @@
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Text, BigInteger, DateTime, func
 from internal.core.db import Base
+from sqlalchemy.orm import relationship
 
 
 class UploadedDocument(Base):
@@ -16,5 +17,7 @@ class UploadedDocument(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+
+    vectors = relationship("DocumentVector", back_populates="document", cascade="all, delete-orphan")
     def __repr__(self):
         return f"<UploadedDocument(id={self.id}, title='{self.title}', status='{self.status}')>"
