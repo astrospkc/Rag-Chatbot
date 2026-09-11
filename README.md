@@ -1,4 +1,4 @@
-# 🤖 Production-Grade RAG Chatbot Platform
+# 🤖 RAG Chatbot Platform
 
 A modular, enterprise-ready **Retrieval-Augmented Generation (RAG) Platform** built as a modern full-stack monorepo. This platform enables users and organizations to upload domain-specific documents (PDFs, text, docs), execute distributed background ingestion, store vector embeddings, and serve high-accuracy context-aware AI chatbot responses.
 
@@ -6,12 +6,12 @@ A modular, enterprise-ready **Retrieval-Augmented Generation (RAG) Platform** bu
 
 ## ⭐ Resume Highlights & Key Engineering Accomplishments
 
-* **Modular RAG System Architecture**: Designed a decoupled, framework-agnostic Python RAG engine supporting customizable document loaders, chunking strategies (Recursive, Semantic), and extensible embedding providers (`OpenAIEmbeddings` / `OpenRouter`).
+* **Modular RAG System Architecture**: Designed a Python RAG engine supporting customizable document loaders, chunking strategies (Recursive, Semantic), and extensible embedding providers (`OpenAIEmbeddings` / `OpenRouter`).
 * **Asynchronous Task Processing with Celery & RabbitMQ**: Implemented distributed task queueing using **Celery** and **CloudAMQP (RabbitMQ)** to handle heavy CPU/IO-bound document parsing and vector generation off the main HTTP request loop.
-* **Resilient API Integration & Rate Limiting**: Engineed custom embedding providers with built-in rate-limiting, exponential backoff/retries, and custom header configurations (`default_headers` for OpenRouter proxy validation).
+* **Resilient API Integration & Rate Limiting**: Engineered custom embedding providers with built-in rate-limiting, exponential backoff/retries, and custom header configurations (`default_headers` for OpenRouter).
 * **AWS Cloud Storage Integration**: Configured secure document ingestion workflows utilizing **AWS S3** presigned URLs for client-side uploads and server-side processing.
 * **Database & Vector Search**: Structured persistence with **PostgreSQL + pgvector** for storing high-dimensional vector embeddings and metadata alongside document chunks.
-* **High-Performance Monorepo Architecture**: Structured frontend (`React`, `Vite`, `TypeScript`, `Tailwind CSS`) and backend (`FastAPI`, `uv`, `Python 3.14`) within a **Turborepo + pnpm workspace**.
+* **High-Performance Monorepo Architecture**: backend (`FastAPI`, `uv`, `Python 3.14`, `golang` , `websockets`) within a **Turborepo + pnpm workspace**.
 
 ---
 
@@ -35,9 +35,9 @@ A modular, enterprise-ready **Retrieval-Augmented Generation (RAG) Platform** bu
 ### 4. Vector Persistence & Retrieval
 - **pgvector Store Integration**: Persistence of embeddings and document chunk metadata into PostgreSQL using `pgvector`.
 
-### 5. Frontend & API Framework
+### 5. API Framework
 - **FastAPI Endpoints**: RESTful API endpoints (`/documents`, `/doc`) with background task handoff.
-- **React + Vite + TypeScript Frontend**: Fast, typed UI for document upload and interactive chatbot messaging.
+
 
 ---
 
@@ -48,7 +48,7 @@ A modular, enterprise-ready **Retrieval-Augmented Generation (RAG) Platform** bu
 - [ ] **Interactive Citation & Source Attribution**: UI preview highlighting exact page numbers and PDF text snippets used to generate responses.
 - [ ] **FAISS On-Demand Vector Indexing**: Local/ephemeral FAISS index creation for ultra-fast in-memory document retrieval.
 - [ ] **Streaming Chat Responses**: Real-time server-sent events (SSE) or WebSockets for token-by-token streaming LLM responses.
-- [ ] **Observability & Analytics**: Integration with LangSmith or Phoenix for tracking RAG retrieval accuracy, latency, and token costs.
+- [ ] **Observability & Analytics**: Integration with LangSmith for tracking RAG retrieval accuracy, latency, and token costs.
 
 ---
 
@@ -73,7 +73,6 @@ rag_chatbot/
 ```
 
 ### Stack Overview
-* **Frontend**: React 18, Vite, TypeScript, Tailwind CSS, React Router
 * **Backend**: FastAPI, Python 3.10+, `uv` package manager
 * **Task Queue & Messaging**: Celery, RabbitMQ (CloudAMQP)
 * **Cloud & Storage**: AWS S3 (`boto3`), PostgreSQL (`pgvector`)
@@ -99,7 +98,6 @@ Set up Python environment in `apps/api`:
 ```bash
 cd apps/api
 uv venv
-uv pip install -r requirements.txt
 cd ../..
 ```
 
