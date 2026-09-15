@@ -94,9 +94,10 @@ class QueryRequest(BaseModel):
 
 router_service = RouterService()
 
-@router.get("/query")
+@router.post("/query/stream")
 async def query_document(requests:QueryRequest, db:Session = Depends(get_db)):
     user_query = requests.user_query
+    print("Received user query: ", user_query)
     doc_id = router_service.route_query_to_document(user_query, db)
     if doc_id is None:
         return {
@@ -107,3 +108,30 @@ async def query_document(requests:QueryRequest, db:Session = Depends(get_db)):
     result = router_service.answer_query(doc_id, user_query, db)
     return result
 
+
+class RetryDocRequest(BaseModel):
+    file_id: int
+
+
+@router.post("/doc/retry")
+def embed_failed_document(request: RetryDocRequest, db: Session = Depends(get_db)):
+    file_id = request.file_id
+    print(f"Received request to retry embedding for document ID: {file_id}")
+    doc = db.query(UploadedDocument).filter(UploadedDocument.id == file_id).first()
+    print(f"Retrying embedding for document ID: {file_id}, Document: {doc}")
+    if not doc:
+        return {
+            "message": "Document not found",
+            "status": "error"
+        }
+    if doc.status == "FAILED":
+        return {
+            "message": "Document is in FAILED status",
+            "status": "error"
+        }
+    # Re-run the ingestion pipeline for the failed document
+    run_ingestion_pipeline.delay(file_id)
+    return {
+        "message": f"Re-ingestion of document {doc.id} has been queued.",
+        "status": "processing"
+    }

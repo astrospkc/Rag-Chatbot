@@ -88,10 +88,11 @@ def run_ingestion_pipeline(file_id: int):
                 chunk_meta = dict(chunk.metadata) if hasattr(chunk, "metadata") and chunk.metadata else {}
                 chunk_meta["document_id"] = doc.id
                 doc_vector = DocumentVector(
-                    title = doc.title,
-                    content = chunk.page_content,
-                    doc_metadata = chunk_meta,
-                    embedding = embedding
+                    document_id=doc.id,
+                    title=doc.title,
+                    content=chunk.page_content,
+                    doc_metadata=chunk_meta,
+                    embedding=embedding
                 )
 
                 vector_records.append(doc_vector)
@@ -107,6 +108,7 @@ def run_ingestion_pipeline(file_id: int):
                 os.remove(temp_file_path)
 
     except Exception as e:
+        db.rollback()
         if 'doc' in locals() and doc:
             doc.status = "FAILED"
             doc.processing_error = str(e)
