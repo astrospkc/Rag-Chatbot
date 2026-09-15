@@ -39,6 +39,7 @@ class RouterService:
         result = self.llm.invoke(router_prompt)
         final = int(result.content.strip()) if result.content.strip().isdigit() else None
         if final is not None:
+            print(f"Routing query to document ID: {final}")
             return final
         return None
 
@@ -55,6 +56,7 @@ class RouterService:
 
         # route the query to a document 
         doc_id =self.route_query_to_document(user_query, db)
+        print(f"Routed query to document ID: {doc_id}")
         embed_provider = EmbeddingFactory.get_provider(provider_name="openai")
         # retrieve chunks from pgvector 
         query_vector = embed_provider.embed_query(user_query)

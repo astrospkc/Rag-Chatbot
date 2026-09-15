@@ -5,9 +5,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+broker_url = os.getenv("RABBITMQ_URL") or os.getenv("CLOUDAMQP_URL") or "amqp://guest:guest@localhost:5672//"
+
 celery_app = Celery(
     "rag_app",
-    broker=os.getenv("CLOUDAMQP_URL"),
+    
+    broker=broker_url,
     include=["internal.tasks.rag_tasks"]
 )
 
