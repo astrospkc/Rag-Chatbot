@@ -12,6 +12,7 @@ from internal.rag.embeddings.embeddings import LangChainEmbeddings
 from internal.rag.chunking.chunking import LangChainChunkerAdapter
 from internal.rag.chunking.chunking import RecursiveChunker
 from internal.rag.loaders.documentLoader import DocumentLoader
+from internal.tasks.rag_tasks import query_processing
 from fastapi import APIRouter, UploadFile, Form, File, Depends
 from sqlalchemy.orm import Session
 from internal.core.db import get_db
@@ -98,14 +99,7 @@ router_service = RouterService()
 async def query_document(requests:QueryRequest, db:Session = Depends(get_db)):
     user_query = requests.user_query
     print("Received user query: ", user_query)
-    doc_id = router_service.route_query_to_document(user_query, db)
-    if doc_id is None:
-        return {
-            "message": "No relevant document found for the given query.",
-            "status": "error"
-        }
-    # fetch the result from the document 
-    result = router_service.answer_query(doc_id, user_query, db)
+    result = query_processing(user_query)
     return result
 
 
