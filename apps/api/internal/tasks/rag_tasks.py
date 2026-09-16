@@ -4,6 +4,7 @@ from internal.rag.embeddings import OpenAIEmbeddingProvider
 from internal.rag.embeddings import EmbeddingFactory
 from internal.rag.embeddings import EmbeddingModelConfig
 from internal.rag.chunking.chunking import RecursiveChunker
+from internal.llm.factory import LLMFactory
 import os
 import tempfile
 from internal.models import UploadedDocument
@@ -13,6 +14,7 @@ from internal.services.aws_service import download_file_from_s3
 from internal.rag.loaders.documentLoader import DocumentLoader
 from kombu import Queue
 from requests.exceptions import RequestException
+from fastapi.responses import StreamingResponse
 
 celery_app.conf.task_queues = (
     Queue("rag"),
@@ -127,6 +129,7 @@ def query_processing(
 )->dict:
     db = SessionLocal() 
     try:
+        print("Processing query: ", query_text)
         # Embed user query
         embed_provider = EmbeddingFactory.get_provider("openai")
         query_vector = embed_provider.embed_query(query_text)
@@ -139,27 +142,31 @@ def query_processing(
         query = db.query(DocumentVector).filter(DocumentVector.doc_metadata["document_id"].as_integer()==doc_id)
         if doc_id:
             query = query.filter(DocumentVector.doc_metadata["document_id"].as_integer()==doc_id)
-            relevant_chunks = (query.order_by(DocumentVector.embedding.cosime_distance(query_vector)).limit(top_k).all())
+            relevant_chunks = (query.order_by(DocumentVector.embedding.cosine_distance(query_vector)).limit(top_k).all())
         if not relevant_chunks:
             return {"answer": "No relevant chunks found for the given query.", "sources": []}
 
         context_str = "\n\n---\n\n".join([f"[Title:{chunk.title}]\n{chunk.content}" for chunk in relevant_chunks])
         #  4. Generate answer via LLM (e.g. ChatOpenAI, Gemini, or OpenRouter)
 
-        prompt = f"Context:\n{context_str}\n\nQuestion: {query_text}"
-        response = llm.invoke(prompt)
-        return {
-            "query": query_text,
-            "context": context_str,
-            "sources": [
-                {
-                    "id": chunk.id,
-                    "title": chunk.title,
-                    "metadata": chunk.doc_metadata
-                }
-                for chunk in relevant_chunks
-            ]
-        }
+        prompt = f"""
+        
+          You are a helpful assistant. Use the following context to answer the question.
+        If the context doesn't contain the answer, say that you don't know.
+
+        Context:\n{context_str}\n\nQuestion: {query_text}
+        Answer:
+
+        """
+        llm = LLMFactory.get_llm()
+
+        def token_generator():
+            for chunk in llm.stream(prompt):
+                if chunk.content:
+                    yield str(chunk.content)
+
+        return StreamingResponse(token_generator(), media_type="text/plain")
+        
     finally:
         db.close()
 
