@@ -17,7 +17,9 @@ from fastapi import APIRouter, UploadFile, Form, File, Depends
 from sqlalchemy.orm import Session
 from internal.core.db import get_db
 from langchain_openai import ChatOpenAI
+from internal.core.helper_func.chat_history import get_guest_chat_history, add_guest_chat_turn, get_formatted_guest_history
 from pydantic import BaseModel
+import uuid
 from dotenv import load_dotenv
 load_dotenv()  # Load environment variables from .env file
 
@@ -92,14 +94,22 @@ def update_document(file_id: int, db: Session = Depends(get_db)):
 
 class QueryRequest(BaseModel):
     user_query:str
-
+    session_id: str|None = None
 router_service = RouterService()
 
 @router.post("/query/stream")
 async def query_document(requests:QueryRequest, db:Session = Depends(get_db)):
+    print("Received query request: ", requests)
+    if requests.session_id is None:
+        requests.session_id = str(uuid.uuid4())
+    
+    add_guest_chat_turn(requests.session_id, requests.user_query, "Processing your query...")
+    history = get_guest_chat_history(requests.session_id)
+    print(f"Session ID: {requests.session_id}, Current chat history: {[msg.content for msg in history.messages]}")
     user_query = requests.user_query
+
     print("Received user query: ", user_query)
-    result = query_processing(user_query)
+    result = query_processing(user_query, session_id=requests.session_id, db=db)
     return result
 
 
