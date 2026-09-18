@@ -27,13 +27,15 @@ var Upgrader = websocket.Upgrader{
 // ClientMessage is the incoming message structure from the frontend
 type ClientMessage struct {
 	UserQuery string `json:"user_query"`
+	SessionID string `json:"session_id,omitempty"`
 }
 
 // StreamResponse is the outgoing message structure sent back to the frontend
 type StreamResponse struct {
-	Token  string `json:"token,omitempty"`
-	Status string `json:"status,omitempty"`
-	Error  string `json:"error,omitempty"`
+	Token     string `json:"token,omitempty"`
+	Status    string `json:"status,omitempty"`
+	Error     string `json:"error,omitempty"`
+	SessionID string `json:"session_id,omitempty"`
 }
 
 // {
@@ -83,15 +85,20 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Stream from Python FastAPI backend in a separate goroutine
-		go StreamFromPython(conn, clientMsg.UserQuery)
+		go StreamFromPython(conn, clientMsg.UserQuery, clientMsg.SessionID)
 	}
 }
 
 // StreamFromPython calls the Python FastAPI streaming endpoint and pipes tokens to the WebSocket
-func StreamFromPython(conn *websocket.Conn, query string) {
-	payload, err := json.Marshal(map[string]string{
+func StreamFromPython(conn *websocket.Conn, query string, sessionID string) {
+	reqMap := map[string]string{
 		"user_query": query,
-	})
+	}
+	if sessionID != "" {
+		reqMap["session_id"] = sessionID
+	}
+
+	payload, err := json.Marshal(reqMap)
 	if err != nil {
 		conn.WriteJSON(StreamResponse{Error: "Failed to encode query payload"})
 		return
