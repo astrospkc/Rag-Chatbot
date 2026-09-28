@@ -1,4 +1,4 @@
-from requests import Session
+from sqlalchemy.orm import Session
 
 from internal.services.router_service import RouterService
 from internal.models import DocumentVector
@@ -14,6 +14,7 @@ from internal.core.db import SessionLocal
 from internal.services.celery_app import celery_app
 from internal.services.aws_service import download_file_from_s3
 from internal.rag.loaders.documentLoader import DocumentLoader
+from internal.services.semantic_caching_service.semantic_cache import SemanticCacheService
 from kombu import Queue
 from requests.exceptions import RequestException
 from fastapi.responses import StreamingResponse
@@ -128,36 +129,24 @@ from internal.core.helper_func.chat_history import (
     add_guest_chat_turn,
 )
 
+semantic_cache = SemanticCacheService()
+
 def query_processing(
-    query_text:str,
-    session_id:str,
-    db:Session,
-    top_k:int = 20,
-    
-    
-)->dict:
-    # db = SessionLocal()
+    query_text: str,
+    session_id: str,
+    db: Session,
+    user_type: str = "guest",  # "guest" or "employee"
+    user_id: str = "guest",
+    top_k: int = 20,
+) -> dict:
     try:
-        
         llm = LLMFactory.get_llm()
 
-        # 1. Fetch previous conversation history for this session
+        # 1. Fetch previous conversation history for this session (user_id and session_id are for history)
         chat_history_str = get_formatted_guest_history(session_id) if session_id else ""
         print(f"Session ID: {session_id}, Chat History: {chat_history_str}")
-        # 2. Rephrase follow-up query if history exists:
-        search_query = query_text
-        if chat_history_str:
-            rephrase_prompt = f"""
-            Given the chat history and follow-up question, rewrite it into a standalone search query.
-            Do NOT answer the question, only rephrase it. If it is already standalone, return it as is.
 
-            Chat History:
-            {chat_history_str}
-
-            Follow-up: {query_text}
-            Standalone Query:
-            """
-                    # 2. Rephrase follow-up query if history exists:
+        # 2. Rephrase follow-up query if history exists
         search_query = query_text
         if chat_history_str:
             rephrase_prompt = f"""
@@ -172,10 +161,10 @@ def query_processing(
             """
             try:
                 search_query_response = llm.invoke(rephrase_prompt)
-                
+
                 # Extract text from content or fallback
                 raw_text = str(search_query_response.content).strip()
-                
+
                 # If content is empty (e.g. reasoning model put output in reasoning_content)
                 if not raw_text and hasattr(search_query_response, "additional_kwargs"):
                     raw_text = search_query_response.additional_kwargs.get("reasoning", "").strip()
@@ -189,12 +178,43 @@ def query_processing(
 
             print(f"Rephrased '{query_text}' -> '{search_query}'")
 
-        # 3. Router & Vector Search using the REPHRASED query!
+        # 3. Generate embedding for search query (used by both Semantic Cache and Vector DB)
+        embed_provider = EmbeddingFactory.get_provider("openai")
+        query_vector = embed_provider.embed_query(search_query)
+
+        # 4. Check Semantic Cache first (anyone - guest or employee - can access cached data)
+        cached_result = None
+        try:
+            cached_result = semantic_cache.check(
+                query_vector=query_vector,
+                user_type=user_type
+            )
+        except Exception as e:
+            print(f"[SemanticCache Check Exception]: {e}")
+
+        if cached_result:
+            print(f"[CACHE HIT] Returning cached response for query: '{search_query}'")
+            cached_answer = cached_result["answer"]
+            sources = cached_result.get("sources", [])
+
+            # Save completed turn to chat history (user_id and session_id are for history)
+            if session_id:
+                add_guest_chat_turn(session_id, query_text, cached_answer)
+
+            return {
+                "query": query_text,
+                "search_query": search_query,
+                "answer": cached_answer,
+                "session_id": session_id,
+                "sources": sources,
+                "cached": True
+            }
+
+        # 5. Cache Miss: Check Vector DB
+        print(f"[CACHE MISS] Querying vector DB for '{search_query}'")
         router_service = RouterService()
         doc_id = router_service.route_query_to_document(search_query, db)
         print(f"Routing query '{search_query}' to document ID: {doc_id}")
-        embed_provider = EmbeddingFactory.get_provider("openai")
-        query_vector = embed_provider.embed_query(search_query)
 
         query = db.query(DocumentVector)
         if doc_id:
@@ -208,7 +228,7 @@ def query_processing(
 
         context_str = "\n\n---\n\n".join([f"[Title: {c.title}]\n{c.content}" for c in relevant_chunks])
 
-        # 4. Final Prompt: Include BOTH Conversation History and Document Context!
+        # 6. Final Prompt: Include BOTH Conversation History and Document Context!
         prompt = f"""
         You are a helpful assistant. Use the conversation history and document context to answer the question.
 
@@ -225,7 +245,23 @@ def query_processing(
         response = llm.invoke(prompt)
         final_answer = str(response.content).strip()
 
-        # 5. Save this completed turn to chat history for next time:
+        sources = [{"title": c.title, "metadata": c.doc_metadata} for c in relevant_chunks]
+
+        # 7. Store new response into semantic cache for future queries
+        try:
+            semantic_cache.store(
+                prompt=search_query,
+                response=final_answer,
+                sources=sources,
+                query_vector=query_vector,
+                user_type=user_type,
+                user_id=user_id,
+                session_id=session_id
+            )
+        except Exception as e:
+            print(f"[SemanticCache Store Exception]: {e}")
+
+        # 8. Save completed turn to chat history (user_id and session_id are for history)
         if session_id:
             add_guest_chat_turn(session_id, query_text, final_answer)
 
@@ -234,60 +270,11 @@ def query_processing(
             "search_query": search_query,
             "answer": final_answer,
             "session_id": session_id,
-            "sources": [{"title": c.title, "metadata": c.doc_metadata} for c in relevant_chunks]
+            "sources": sources,
+            "cached": False
         }
     finally:
-        db.close()
-
-# def query_processing(
-#     query_text:str,
-#     session_id:str,
-#     db:Session,
-#     top_k:int = 20,
-    
-    
-# )->dict:
-#     db = SessionLocal() 
-#     try:
-#         print("Processing query: ", query_text)
-#         # Embed user query
-#         embed_provider = EmbeddingFactory.get_provider("openai")
-#         query_vector = embed_provider.embed_query(query_text)
-#         router_service = RouterService()
-#         doc_id = router_service.route_query_to_document(query_text, db)
-#         if doc_id is None:
-#             return {"answer": "No relevant document found for the given query.", "sources": []}
-
-#         # search nearest chunks using pgvector cosine distance
-#         query = db.query(DocumentVector).filter(DocumentVector.doc_metadata["document_id"].as_integer()==doc_id)
-#         if doc_id:
-#             query = query.filter(DocumentVector.doc_metadata["document_id"].as_integer()==doc_id)
-#             relevant_chunks = (query.order_by(DocumentVector.embedding.cosine_distance(query_vector)).limit(top_k).all())
-#         if not relevant_chunks:
-#             return {"answer": "No relevant chunks found for the given query.", "sources": []}
-
-#         context_str = "\n\n---\n\n".join([f"[Title:{chunk.title}]\n{chunk.content}" for chunk in relevant_chunks])
-#         #  4. Generate answer via LLM (e.g. ChatOpenAI, Gemini, or OpenRouter)
-
-#         prompt = f"""
-        
-#           You are a helpful assistant. Use the following context to answer the question.
-#         If the context doesn't contain the answer, say that you don't know.
-
-#         Context:\n{context_str}\n\nQuestion: {query_text}
-#         Answer:
-
-#         """
-#         llm = LLMFactory.get_llm()
-
-#         def token_generator():
-#             for chunk in llm.stream(prompt):
-#                 if chunk.content:
-#                     yield str(chunk.content)
-
-#         return StreamingResponse(token_generator(), media_type="text/plain")
-        
-#     finally:
-#         db.close()
+        if db:
+            db.close()
 
     
