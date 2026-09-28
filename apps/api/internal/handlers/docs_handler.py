@@ -93,6 +93,8 @@ def update_document(file_id: int, db: Session = Depends(get_db)):
     return doc
 
 class QueryRequest(BaseModel):
+    user_type: str = "guest"  # "guest" or "employee"
+    user_id: str = "guest"     # "guest" or specific employee ID (
     user_query:str
     session_id: str|None = None
 router_service = RouterService()
@@ -103,13 +105,11 @@ async def query_document(requests:QueryRequest, db:Session = Depends(get_db)):
     if requests.session_id is None:
         requests.session_id = str(uuid.uuid4())
     
-    add_guest_chat_turn(requests.session_id, requests.user_query, "Processing your query...")
-    history = get_guest_chat_history(requests.session_id)
-    print(f"Session ID: {requests.session_id}, Current chat history: {[msg.content for msg in history.messages]}")
     user_query = requests.user_query
 
     print("Received user query: ", user_query)
-    result = query_processing(user_query, session_id=requests.session_id, db=db)
+    result = query_processing(user_query, session_id=requests.session_id , db=db,user_type=requests.user_type, user_id=requests.user_id)
+    print("result from query_processing: ", result)
     return result
 
 
