@@ -18,6 +18,8 @@ from internal.services.semantic_caching_service.semantic_cache import SemanticCa
 from kombu import Queue
 from requests.exceptions import RequestException
 from fastapi.responses import StreamingResponse
+from internal.core.metrics import REQUEST_COUNT, VECTOR_SEARCH_LATENCY, LLM_LATENCY
+import time
 
 celery_app.conf.task_queues = (
     Queue("rag"),
@@ -141,6 +143,7 @@ def query_processing(
 ) -> dict:
     try:
         llm = LLMFactory.get_llm()
+        REQUEST_COUNT.labels(user_type=user_type).inc()
 
         # 1. Fetch previous conversation history for this session (user_id and session_id are for history)
         chat_history_str = get_formatted_guest_history(session_id) if session_id else ""
@@ -220,11 +223,13 @@ def query_processing(
         if doc_id:
             query = query.filter(DocumentVector.doc_metadata["document_id"].as_integer() == doc_id)
 
+        start_time = time.time()
         relevant_chunks = (
             query.order_by(DocumentVector.embedding.cosine_distance(query_vector))
             .limit(top_k)
             .all()
         )
+        VECTOR_SEARCH_LATENCY.observe(time.time() - start_time)
 
         context_str = "\n\n---\n\n".join([f"[Title: {c.title}]\n{c.content}" for c in relevant_chunks])
 
@@ -242,8 +247,10 @@ def query_processing(
         Answer:
         """
 
+        start_time = time.time()
         response = llm.invoke(prompt)
         final_answer = str(response.content).strip()
+        LLM_LATENCY.observe(time.time() - start_time)
 
         sources = [{"title": c.title, "metadata": c.doc_metadata} for c in relevant_chunks]
 

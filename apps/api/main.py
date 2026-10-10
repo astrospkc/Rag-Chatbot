@@ -2,11 +2,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from internal.handlers import docs_handler
 from internal.core import db
+from internal.core.metrics import REQUEST_COUNT, CACHE_HITS, CACHE_MISSES, CACHE_LATENCY, VECTOR_SEARCH_LATENCY, LLM_LATENCY
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
 from contextlib import asynccontextmanager
 
@@ -41,7 +43,10 @@ app.add_middleware(
 
 # Register handler routers
 app.include_router(docs_handler.router)
-
+@app.get("/metrics")
+async def metrics():
+    REQUEST_COUNT.labels(user_type="system").inc()
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 @app.get("/")
 async def root():
