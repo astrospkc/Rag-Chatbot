@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 
 from internal.core.config import settings
 from internal.services.semantic_caching_service.redis_schema import schema,create_cache_schema, DOC_PREFIX
+from internal.core.metrics import CACHE_HITS, CACHE_MISSES, CACHE_LATENCY
 
 load_dotenv()
 
@@ -102,7 +103,9 @@ class SemanticCacheService:
         vector_query.sort_by([])
 
         try:
+            start_time = time.time()
             results = self.index.query(vector_query)
+            CACHE_LATENCY.labels(user_type=user_type or "unknown").observe(time.time() - start_time)
             if results:
                 best_match = results[0]
                 distance = float(best_match.get("vector_distance", 1.0))
@@ -111,6 +114,7 @@ class SemanticCacheService:
                 # Step 3: Check if distance is within threshold (distance <= 0.10 means similarity >= 90%)
                 if distance <= threshold:
                     print(f"[CACHE HIT] Distance {distance:.4f} <= {threshold} (Similarity: {similarity * 100:.1f}%) | Cached query: '{best_match.get('prompt')}'")
+                    CACHE_HITS.labels(user_type=user_type or "unknown").inc()
                     sources_raw = best_match.get("sources", "[]")
                     return {
                         "prompt": best_match.get("prompt"),
@@ -122,6 +126,7 @@ class SemanticCacheService:
                     }
                 else:
                     print(f"[CACHE MISS] Best match too distant (Distance: {distance:.4f} > {threshold}, Similarity: {similarity * 100:.1f}%)")
+                    CACHE_MISSES.labels(user_type=user_type or "unknown").inc()
         except Exception as e:
             print(f"[SemanticCache Check Error]: {e}")
 
